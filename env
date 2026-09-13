@@ -1,2 +1,6 @@
+# 知乎开放平台 AccessSecret（zhihu_search API）
+ZHIHU_ACCESS_SECRET=be85c5ce20f6a9dc1642d180cf08496420727e20
+
+# 大模型Agent接口，用于AI生成用户画像
 ZHIHU_AGENT_BASE_URL=https://api.zhihu.com/v1
-ZHIHU_AGENT_API_KEY=你的知乎黑客松API_KEY
+ZHIHU_AGENT_API_KEY=

@@ -1,52 +1,54 @@
 import streamlit as st
-from utils.config import DEMO_MODE
-from openai import OpenAI
+import numpy as np
 
-st.set_page_config(page_title="3｜AI社交催化剂", layout="wide")
-st.title("💬 AI社交破冰 & 讨论策略生成器")
+st.set_page_config(page_title="同频群体分析", layout="wide")
 
-if "matched_list" not in st.session_state:
-    st.warning("请先完成匹配！")
+st.title("同频群体分析")
+st.caption("基于同频匹配结果进行群体统计与观点分析")
+
+if "match_result" not in st.session_state or len(st.session_state["match_result"]) == 0:
+    st.error("需要先完成同频匹配计算，请前往匹配页面执行操作")
     st.stop()
 
-matched = st.session_state["matched_list"]
-names = [x["name"] for x in matched]
-idx = st.selectbox("选择交流对象", range(len(names)), format_func=lambda x:names[x])
-target = matched[idx]
-base = st.session_state["current_profile"]
+match_result = st.session_state["match_result"]
+st.success(f"已读取匹配结果，匹配用户数量：{len(match_result)}")
 
-style = st.radio("破冰文案风格", ["学术严谨","轻松友好","极简高效","深度思辨"])
+st.divider()
+st.subheader("同频用户列表")
+for idx, item in enumerate(match_result):
+    st.markdown(f"**{idx + 1}. 用户：{item['input']}** | 相似度：{item['similarity']}")
+    with st.expander("查看该用户 8 维观点得分"):
+        for name, score in item["profile"]["viewpoint_scores"]:
+            st.markdown(f"- {name}：{score} 分")
 
-MOCK = {
-    "topics":["AI与学习效率","社区理性讨论建设","青年独立思考能力"],
-    "lines":["我很认同你的观点，想听听你更多的看法。","这个角度很新颖，能否展开聊聊？"],
-    "risk":["避免极端对立话题","避免情绪化评判"]
-}
+emb_list = []
+sim_list = []
+score_list = []
+for item in match_result:
+    emb_list.append(np.array(item["profile"]["embedding"]))
+    sim_list.append(item["similarity"])
+    score_list.append(item["profile"]["viewpoint_scores"])
 
-if st.button("✨ 一键生成社交策略"):
-    if DEMO_MODE:
-        res = MOCK
-    else:
-        client = OpenAI()
-        prompt = f"""
-你是知乎社区AI社交助手，根据两个用户的画像，生成{style}风格的破冰话术、推荐话题、避雷提示。
-用户A：{base}
-用户B：{target}
-输出JSON：{{topics:[],lines:[],risk:[]}}
-        """
-        out = client.chat.completions.create(model="gpt-3.5-turbo",messages=[{"role":"user","content":prompt}],temperature=0.6)
-        import json
-        res = json.loads(out.choices[0].message.content)
+st.divider()
+st.subheader("基础统计信息")
+st.write(f"参与分析同频用户数：{len(emb_list)}")
+st.write(f"相似度区间：{min(sim_list)} ~ {max(sim_list)}")
 
-    col1,col2,col3 = st.columns(3)
-    with col1:
-        st.subheader("✅适配话题")
-        for t in res["topics"]: st.success(t)
-    with col2:
-        st.subheader("🗨️破冰话术")
-        for s in res["lines"]: st.code(s)
-    with col3:
-        st.subheader("⚠️避雷提醒")
-        for r in res["risk"]: st.error(r)
+if st.button("执行群体分析，输出分析结果"):
+    group_analysis_result = {
+        "user_count": len(emb_list),
+        "sim_min": float(min(sim_list)),
+        "sim_max": float(max(sim_list)),
+        "match_users": match_result,
+        "embeddings": [e.tolist() for e in emb_list],
+        "all_scores": score_list,
+    }
+    st.session_state["group_analysis_result"] = group_analysis_result
+    st.success("群体分析完成，可前往报告输出页面继续处理")
 
-st.info("👉 下一步：进入Agent对话仿真，预演真实交流")
+# ===== 修复处：使用 .get() 并在赋值后判断是否为 None =====
+gr = st.session_state.get("group_analysis_result")
+if gr is not None:
+    st.info(f"当前已生成群体分析结果，有效用户数：{gr['user_count']}")
+else:
+    st.info("点击按钮生成群体分析结果")

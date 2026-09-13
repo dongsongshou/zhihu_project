@@ -1,59 +1,96 @@
 import streamlit as st
-from utils.config import DEMO_MODE
-from utils.visual_helper import build_network_html, render_pyvis_html, plot_cluster_dist, plot_heatmap
+import numpy as np
+
 from utils.match_engine import cluster_users
 
-st.set_page_config(page_title="知同频｜AI灵魂匹配", layout="wide")
+st.set_page_config(page_title="知乎同频观点匹配系统", layout="wide")
 
-# 初始化会话
-if "candidate_pool" not in st.session_state:
-    from utils.ai_parser import MOCK_PARSE_RESULT
-    st.session_state["candidate_pool"] = [
-        {**MOCK_PARSE_RESULT,"name":"用户A","embedding":[0.11,0.23,-0.04,0.31,0.44,-0.20,0.17,0.10]},
-        {**MOCK_PARSE_RESULT,"name":"用户B","embedding":[0.60,-0.30,0.55,-0.22,0.10,0.11,-0.40,0.20]},
-        {**MOCK_PARSE_RESULT,"name":"用户C","embedding":[0.20,0.10,0.15,0.05,-0.10,0.30,0.22,-0.31]},
-        {**MOCK_PARSE_RESULT,"name":"用户D","embedding":[0.33,0.41,0.22,0.10,-0.20,0.17,0.05,0.31]},
-        {**MOCK_PARSE_RESULT,"name":"用户E","embedding":[-0.11,-0.23,0.44,0.30,0.20,0.10,-0.17,0.22]}
-    ]
+for key, default in {
+    "current_profile": None,
+    "user_candidate_pool": [],
+    "match_result": [],
+    "group_analysis_result": None,
+    "final_report": None,
+}.items():
+    st.session_state.setdefault(key, default)
 
-# 侧边栏
-with st.sidebar:
-    st.header("⚙️ 系统状态")
-    st.success("🎮 演示模式运行中" if DEMO_MODE else "🔑 真实API模式")
-    if st.button("🔄 重置所有数据"):
-        st.session_state.clear()
-        st.rerun()
-    st.divider()
-    st.metric("社区用户总数", len(st.session_state["candidate_pool"]))
+st.title("知乎同频观点匹配系统")
+st.caption("基于 8 维观点向量的用户画像、同频匹配、群体分析与报告输出演示")
 
-# 首页标题
-st.title("🧠 知同频｜AI观点社区匹配系统")
-st.subheader("知乎黑客松 2026｜灵魂匹配局 高阶创新版")
-st.markdown("""
-### 🔥 项目高阶创新点（比赛高分核心）
-1. **8维用户观点向量建模**（不止标签，深度人格建模）
-2. **KMeans社区用户聚类**，自动划分社交圈层
-3. **共识度/冲突度双维度计算**
-4. **三策略智能匹配**：同频共鸣 / 互补学习 / 破茧碰撞
-5. **AI社交破冰多风格文案**
-6. **Agent数字分身对话仿真 + 情绪复盘**
-7. **完整社区社交网络图谱+热力图分析**
-""")
+st.markdown(
+    """
+该项目围绕知乎内容场景构建完整的观点分析链路：
+
+1. 用户画像构建：输入关键词，生成 8 维观点画像。
+2. 同频匹配：在候选池中计算余弦相似度，筛选高相关用户。
+3. 群体分析：汇总匹配结果，形成群体层面的统计视图。
+4. 报告输出：生成结构化结果，便于展示与扩展。
+"""
+)
+
 st.divider()
 
-# 社区大盘分析
-st.subheader("🌐 社区全局智能分析大盘")
-user_clustered, centers = cluster_users(st.session_state["candidate_pool"])
-st.session_state["candidate_pool"] = user_clustered
+candidate_pool = st.session_state["user_candidate_pool"]
+match_result = st.session_state["match_result"]
+group_analysis_result = st.session_state["group_analysis_result"]
+final_report = st.session_state["final_report"]
 
-col1, col2 = st.columns(2)
-with col1:
-    plot_cluster_dist(user_clustered)
-with col2:
-    plot_heatmap(user_clustered)
+metric_cols = st.columns(4)
+metric_cols[0].metric("候选用户", len(candidate_pool))
+metric_cols[1].metric("匹配结果", len(match_result))
+metric_cols[2].metric("群体分析", "已生成" if group_analysis_result else "未生成")
+metric_cols[3].metric("最终报告", "已生成" if final_report else "未生成")
 
-st.subheader("🕸️ 社区用户动态关系网络图")
-net_html = build_network_html(user_clustered)
-render_pyvis_html(net_html)
+st.subheader("候选池概览")
+if len(candidate_pool) >= 2:
+    try:
+        user_clustered, centers = cluster_users(candidate_pool)
+        st.success(f"已完成聚类分析，共 {len(centers)} 个簇")
+    except Exception as exc:
+        st.error(f"聚类分析失败：{exc}")
+        user_clustered = candidate_pool
+        centers = None
+else:
+    st.info("候选用户不足 2 个，暂不执行聚类分析")
+    user_clustered = candidate_pool
+    centers = None
 
-st.info("👈 左侧页面依次体验：画像解析 → 智能匹配 → AI破冰 → 对话仿真")
+if user_clustered:
+    with st.expander("查看候选池明细"):
+        for item in user_clustered:
+            name = item.get("input_text", item.get("name", "未知用户"))
+            cluster_label = item.get("cluster", -1)
+            embedding = np.round(np.array(item.get("embedding", [])), 4)
+            st.write(f"{name} | 聚类标签：{cluster_label} | 向量：{embedding}")
+
+if centers is not None:
+    with st.expander("查看聚类中心"):
+        for idx, center in enumerate(centers):
+            st.write(f"簇 {idx}：{np.round(center, 4)}")
+
+st.divider()
+
+st.subheader("流程状态")
+if st.session_state.get("current_profile"):
+    st.info(f"当前已生成画像：{st.session_state['current_profile'].get('input_text', '未命名输入')}")
+else:
+    st.info("尚未生成用户画像")
+
+if match_result:
+    st.success("同频匹配结果已就绪")
+else:
+    st.warning("同频匹配结果尚未生成，请前往匹配页面完成计算")
+
+if group_analysis_result:
+    st.success("群体分析结果已就绪")
+else:
+    st.warning("群体分析结果尚未生成")
+
+if final_report:
+    st.success("最终报告已就绪")
+else:
+    st.warning("最终报告尚未生成")
+
+st.divider()
+st.caption("建议按顺序完成：用户画像构建 -> 同频匹配 -> 群体分析 -> 报告输出")
+
