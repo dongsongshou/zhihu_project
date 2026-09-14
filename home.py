@@ -1,10 +1,71 @@
 import streamlit as st
 from pathlib import Path
 
+st.set_page_config(page_title="知乎同频观点匹配系统", layout="wide")
+
+st.markdown("""
+<style>
+/* 统一强化操作按钮，主按钮与普通按钮有明显层级。 */
+.stButton > button, .stDownloadButton > button, .stPageLink > a {
+    min-height: 2.7rem;
+    border-radius: 10px;
+    font-weight: 700;
+    border: 1px solid #155e75;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.stButton > button[kind="primary"] {
+    background: #075985;
+    color: #fff;
+    border-color: #05445e;
+    box-shadow: 0 4px 12px rgba(7,89,133,.28);
+}
+.stButton > button[kind="primary"]:hover {
+    background: #064e70;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(7,89,133,.36);
+}
+.stButton > button:not([kind="primary"]), .stDownloadButton > button {
+    background: #e0f2fe;
+    color: #0c4a6e;
+}
+.stButton > button:not([kind="primary"]):hover, .stDownloadButton > button:hover {
+    background: #bae6fd;
+}
+.stButton > button:disabled { opacity: .45; }
+.hero-cta { margin: 1.4rem 0; }
+.hero-cta a, .hero-cta a:link, .hero-cta a:visited,
+.hero-cta [data-testid="stPageLink-NavLink"],
+.hero-cta [data-testid="stPageLink-NavLink"]:link,
+.hero-cta [data-testid="stPageLink-NavLink"]:visited {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3.4rem;
+    padding: 0 2rem;
+    border-radius: 14px;
+        background: #7c2d12 !important;
+        color: #ffffff !important;
+        background-image: linear-gradient(135deg, #9a3412, #7c2d12) !important;
+    border: 2px solid #fbbf24 !important;
+    box-shadow: 0 8px 20px rgba(245,158,11,.35);
+    font-size: 1.08rem;
+    font-weight: 800;
+    text-decoration: none !important;
+    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+}
+.hero-cta a:hover, .hero-cta a:focus,
+.hero-cta [data-testid="stPageLink-NavLink"]:hover,
+.hero-cta [data-testid="stPageLink-NavLink"]:focus {
+    background: #92400e !important;
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 11px 26px rgba(124,45,18,.55);
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 from utils.exploration_ui import render
 
-
-st.set_page_config(page_title="知乎同频观点匹配系统", layout="wide")
 
 def landing():
     st.title("一个热点，不止一种声音")
@@ -14,7 +75,9 @@ def landing():
     if hero_image.is_file():
         st.image(str(hero_image), use_container_width=True)
     st.markdown("**选择话题 → 收集内容 → 快速阅读 → 探索关系 → 发现作者 → 筹备讨论 → 导出报告**")
+    st.markdown('<div class="hero-cta">', unsafe_allow_html=True)
     st.page_link(explore_page, label="开始 / 继续话题探索")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.caption("支持知乎热榜和自定义话题。返回上一步保留数据，不重复调用接口。")
     with st.expander("算法与使用边界"):
         st.markdown("""

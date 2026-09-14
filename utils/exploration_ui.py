@@ -80,6 +80,7 @@ def _render_page():
     ready = False
 
     if step == 0:
+        st.info("操作提示：先获取热榜或输入话题，再点击下方深色的“确认话题”按钮。")
         mode = st.radio("话题来源", ["知乎热榜", "自定义话题"], horizontal=True)
         title, url = "", ""
         if mode == "知乎热榜":
@@ -111,6 +112,7 @@ def _render_page():
         ready = state["anchor"] == {"title": title, "url": url} and bool(title)
 
     elif step == 1:
+        st.info("操作提示：选择检索角度后，点击深色的“检索 / 重新构建候选池”按钮。")
         angles = st.multiselect("检索角度", ANGLES, default=ANGLES[:3])
         count = st.slider("每角度返回条数", 1, 10, 5)
         queries = [f"{state['anchor']['title']} {angle}" for angle in angles]
@@ -174,6 +176,7 @@ def _render_page():
             st.info("至少需要两条内容才能匹配，请返回上一步补充检索。")
 
     elif step == 3:
+        st.info("操作提示：选择基准内容后，点击“计算并固定排序”；查看依据不会改变推荐顺序。")
         pool = state["pool"]
         base = st.selectbox("基准内容", range(len(pool)), format_func=lambda i: f"对象 {i+1}", key=f"wizard_base_{state['revision']}")
         st.write(pool[base]["input_text"])
