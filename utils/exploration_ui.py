@@ -66,6 +66,9 @@ def _page_controls(step, ready, location):
 def _render_page():
     state = st.session_state.setdefault("exploration", new_exploration())
     step = state["step"]
+    home_page = st.session_state.get("home_page_object")
+    if home_page is not None:
+        st.page_link(home_page, label="← 返回首页")
     st.title(f"{step + 1:02d} / {STEPS[step]}")
     top_controls = st.container()
     st.caption("所有步骤共用本次话题会话；旧版页面的候选池不参与本流程。")
