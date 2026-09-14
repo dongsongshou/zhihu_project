@@ -27,7 +27,9 @@ norms = np.linalg.norm(vectors, axis=1, keepdims=True)
 normalized = np.divide(vectors, norms, out=np.zeros_like(vectors), where=norms != 0)
 valid = norms[:, 0] > 0
 similarities = np.clip(normalized @ normalized.T, -1.0, 1.0)
-labels = [f"{i + 1}. {p.get('input_text', '未命名')}" for i, p in enumerate(pool)]
+# 图表和矩阵使用稳定的绝对序号，避免长标题挤压坐标轴；完整标题仍在详情表中展示。
+labels = [f"对象 {i + 1}" for i in range(len(pool))]
+display_names = [p.get("input_text", "未命名") for p in pool]
 names = pool[0].get("viewpoint_names", [])
 if len(names) != vectors.shape[1]:
     names = [f"维度 {i + 1}" for i in range(vectors.shape[1])]
@@ -55,12 +57,24 @@ with atlas:
 with compare:
     left, right = st.columns(2)
     a = left.selectbox("基准对象", range(len(pool)), format_func=lambda i: labels[i], key="explore_a")
-    b = right.selectbox("对比对象", [i for i in range(len(pool)) if i != a], format_func=lambda i: labels[i], key="explore_b")
+    compare_options = [i for i in range(len(pool)) if i != a]
+    # 基准对象变化时，清理旧的对比对象状态，避免 Streamlit 复用旧索引。
+    if st.session_state.get("explore_b") not in compare_options:
+        st.session_state["explore_b"] = compare_options[0]
+    b = right.selectbox(
+        "对比对象",
+        compare_options,
+        format_func=lambda i: labels[i],
+        key="explore_b",
+    )
     if not (valid[a] and valid[b]):
         st.warning("至少一个对象缺少有效特征，暂不解释相似性。")
     else:
         st.metric("主题余弦相似度", f"{similarities[a, b]:.3f}")
-        frame = pd.DataFrame({"基准对象": normalized[a], "对比对象": normalized[b]}, index=names)
+        frame = pd.DataFrame(
+            {"基准对象": normalized[a], "对比对象": normalized[b]},
+            index=pd.Index(names, name="主题维度"),
+        )
         st.bar_chart(frame)
         difference = normalized[b] - normalized[a]
         detail = frame.copy()
@@ -113,7 +127,7 @@ with recommend:
                 return weight * float(similarities[base, i]) - (1 - weight) * redundancy
 
             chosen = max(candidates, key=lambda i: (score(i), -i))
-            rows.append({"推荐顺序": len(selected) + 1, "对象": labels[chosen], "主题相似度": float(similarities[base, chosen]), "选择时 MMR 分": score(chosen)})
+            rows.append({"推荐顺序": len(selected) + 1, "对象序号": chosen + 1, "对象标题": display_names[chosen], "主题相似度": float(similarities[base, chosen]), "选择时 MMR 分": score(chosen)})
             selected.append(chosen)
             candidates.remove(chosen)
     if not valid[base]:
@@ -134,7 +148,7 @@ with recommend:
         mean = normalized[members].mean(axis=0)
         topics = [str(names[i]) for i in np.argsort(-mean, kind="stable") if mean[i] > 0][:3]
         st.subheader("讨论小组草案")
-        st.write("参与对象：" + "、".join(labels[i] for i in members))
+        st.write("参与对象：" + "、".join(f"{labels[i]}（{display_names[i]}）" for i in members))
         st.write("主要覆盖主题：" + ("、".join(topics) or "暂无法提取"))
         agenda = [f"围绕“{topic}”：各自提供一条来源材料，再讨论证据、适用条件与局限。" for topic in topics]
         for step, prompt in enumerate(agenda, 1):

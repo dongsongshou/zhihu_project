@@ -5,6 +5,8 @@ import re
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+STOPWORDS = set("的 了 是 在 和 与 也 有 我 你 他 她 他们 自己 这个 那个 一个 一些 以及 进行 通过 相关 内容 问题 事情 情况 时候 可以 可能 认为 其实 现在 以及 工作 视频 小时 他们 我们 你们 如何 什么 为什么 方式 调查 单人 有本 切片 员工 员工 员工 指责 线下 网友 网民 他们 这篇 那篇 其中 以及 因此 所以 需要 时候 方面 目前 现在 之后 之前".split())
+
 
 def clean_content(text):
     text = html.unescape(re.sub(r"<[^>]+>", " ", str(text or "")))
@@ -16,12 +18,15 @@ def content_features(text):
     # 中文采用连续 2～4 字片段；英文采用完整单词，避免中英分词依赖。
     for segment in re.findall(r"[\u4e00-\u9fff]+|[a-zA-Z]+", text.lower()):
         if segment.isascii():
-            if len(segment) > 1:
+            if len(segment) > 2 and segment not in STOPWORDS:
                 yield segment
         else:
+            # 过滤高频虚词；中文 n-gram 只保留至少包含实质性汉字的片段。
             for width in (2, 3, 4):
                 for start in range(len(segment) - width + 1):
-                    yield segment[start:start + width]
+                    token = segment[start:start + width]
+                    if token not in STOPWORDS and not all(ch in "的了是在和与也有我你他她这那一及其所将被对从到由为并而但或都还又更很最也" for ch in token):
+                        yield token
 
 
 def match_content(pool, base_index, text_weight=0.8, real_only=True, top_k=20):
@@ -63,8 +68,10 @@ def match_content(pool, base_index, text_weight=0.8, real_only=True, top_k=20):
         weight = text_weight if has_topic else 1.0
         text_score = float(np.clip(text_scores[local_index], 0, 1))
         contributions = matrix[row].multiply(matrix[local_index]).tocoo()
-        order = np.argsort(-contributions.data, kind="stable")[:12]
-        evidence = [{"feature": str(feature_names[contributions.col[j]]), "contribution": float(contributions.data[j])} for j in order]
+        # 解释词优先选择较长、信息量更高的片段，避免输出“他们/小时/视频”等低价值词。
+        valid_pairs = [(j, value) for j, value in enumerate(contributions.data) if len(str(feature_names[contributions.col[j]])) >= 2]
+        valid_pairs.sort(key=lambda pair: pair[1] * (1 + 0.12 * min(len(str(feature_names[contributions.col[pair[0]]])), 4)), reverse=True)
+        evidence = [{"feature": str(feature_names[contributions.col[j]]), "contribution": float(value)} for j, value in valid_pairs[:8]]
         results.append({
             "index": index, "input": pool[index].get("input_text", "未命名"),
             "profile": pool[index], "similarity": weight * text_score + (1 - weight) * topic_score,
