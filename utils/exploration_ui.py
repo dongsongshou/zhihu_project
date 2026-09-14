@@ -10,6 +10,7 @@ import streamlit as st
 from zhihu_client import ZhihuClient, ZhihuAPIError
 from utils.content_match import match_content
 from utils.connections_ui import render_connections, safe_source
+from utils.llm_judge import judge_pair, SemanticJudgeError
 
 STEPS = ["选择话题", "收集内容", "快速阅读", "探索关系", "发现作者与讨论", "导出报告"]
 ANGLES = ["背景与事实", "质疑与风险", "实践经验", "行业影响", "普通人体验"]
@@ -177,18 +178,97 @@ def _render_page():
         base = st.selectbox("基准内容", range(len(pool)), format_func=lambda i: f"对象 {i+1}", key=f"wizard_base_{state['revision']}")
         st.write(pool[base]["input_text"])
         st.caption("本流程按搜索摘要做 TF-IDF 正文匹配，不显示不存在的主题向量贡献。相似度不代表立场一致。")
+        semantic_mode = st.checkbox("使用知乎直答进行语义判断（会调用接口）", value=False, key=f"semantic_mode_{state['revision']}")
+        cache_key = (state["revision"], base, semantic_mode)
+        cached = state.get("match_cache")
+        should_compute = cached is None or cached.get("key") != cache_key
+        if should_compute:
+            st.info("当前基准对象或语义模式已变化；点击“计算并固定排序”后才会重新匹配。")
+        if st.button("计算并固定排序", type="primary", disabled=not should_compute, key=f"compute_match_{state['revision']}_{base}_{semantic_mode}"):
+            st.session_state[f"run_match_{state['revision']}_{base}_{semantic_mode}"] = True
+            st.rerun()
+        should_run = st.session_state.pop(f"run_match_{state['revision']}_{base}_{semantic_mode}", False)
         try:
-            results, info = match_content(pool, base, text_weight=1.0, real_only=True, top_k=len(pool)-1)
+            if cached is not None and cached.get("key") == cache_key and not should_run:
+                results, info = cached["results"], cached["info"]
+            else:
+                results, info = match_content(pool, base, text_weight=1.0, real_only=True, top_k=len(pool)-1)
+            if semantic_mode and (cached is None or cached.get("key") != cache_key or should_run):
+                progress = st.progress(0, text="正在进行语义判断…")
+                for position, result in enumerate(results, 1):
+                    try:
+                        judgment = judge_pair(pool[base]["search_content"], result["profile"]["search_content"], state["anchor"]["title"])
+                    except SemanticJudgeError:
+                        # 单个对象请求失败时直接跳过，不影响其他成功结果。
+                        continue
+                    result["llm_score"] = judgment["score"]
+                    result["semantic_reason"] = judgment.get("reason", "")
+                    result["common_interest"] = judgment.get("common_interest", "")
+                    result["difference"] = judgment.get("difference", "")
+                    result["similarity"] = round(0.7 * judgment["score"] + 0.3 * result["similarity"], 4)
+                    progress.progress(position / len(results))
+                # 只保留成功完成语义判断的结果，失败对象不参与本次语义排序。
+                results = [item for item in results if "llm_score" in item]
+                results.sort(key=lambda item: (-item["similarity"], item["index"]))
+                state["method"] = "知乎直答语义判断 70% + TF-IDF 词法证据 30%"
+
             state["results"], state["base"] = results, base
-            state["method"] = "TF-IDF 中文 2～4 字片段 / 英文单词，L2 归一化余弦"
+            state["match_cache"] = {"key": cache_key, "results": results, "info": info}
+            state.setdefault("method", "TF-IDF 中文 2～4 字片段 / 英文单词，L2 归一化余弦")
             frame = pd.DataFrame([{"对象": f"对象 {r['index']+1}", "作者昵称": r['profile'].get('author_name') or '未提供', "相似度": r["similarity"], "标题": r["input"]} for r in results])
             if results:
                 st.bar_chart(frame.set_index("对象")[["相似度"]])
                 st.dataframe(frame, hide_index=True, use_container_width=True)
                 detail = st.selectbox("查看得分依据", range(len(results)), format_func=lambda i: f"对象 {results[i]['index']+1}", key=f"wizard_detail_{state['revision']}_{base}")
-                st.dataframe(pd.DataFrame(results[detail]["evidence"]), hide_index=True)
-                st.caption("展示最高贡献的共同片段；片段可重叠，不是独立的观点证据。")
+                selected_result = results[detail]
+                if semantic_mode and selected_result.get("semantic_reason"):
+                    st.markdown("**大模型语义判断**")
+                    st.write(selected_result.get("semantic_reason"))
+                    st.write("共同兴趣：" + (selected_result.get("common_interest") or "未提取"))
+                    st.write("主要差异：" + (selected_result.get("difference") or "未提取"))
+                    st.metric("大模型语义相关度", f"{selected_result.get('llm_score', 0):.3f}")
+                    with st.expander("查看 TF-IDF 技术证据"):
+                        st.dataframe(pd.DataFrame(selected_result["evidence"]), hide_index=True)
+                        st.caption("这些词片段仅用于技术审计，不是大模型生成的语义依据，也不代表独立观点证据。")
+                else:
+                    st.dataframe(pd.DataFrame(selected_result["evidence"]), hide_index=True)
+                    st.caption("展示最高贡献的共同片段；片段可重叠，不是独立的观点证据。")
             st.caption(f"参与文本 {info['documents']} 条 · TF-IDF 特征 {info['features']} 个")
+            if semantic_mode:
+                st.caption("当前推荐排序以大模型语义判断为主；下方关键词仅作为可选的 TF-IDF 技术审计证据。")
+                st.markdown("### 大模型语义推荐列表")
+                st.caption("系统已自动完成候选批量判断，并按综合分排序；无需逐个点击。")
+                semantic_rows = []
+                for item in results:
+                    semantic_rows.append({
+                        "推荐顺序": len(semantic_rows) + 1,
+                        "对象": f"对象 {item['index'] + 1}",
+                        "作者昵称": item["profile"].get("author_name") or "未提供",
+                        "语义相关度": round(item.get("llm_score", 0), 4),
+                        "综合分": round(item["similarity"], 4),
+                        "共同兴趣": item.get("common_interest", ""),
+                        "主要差异": item.get("difference", ""),
+                        "标题": item["input"],
+                    })
+                if semantic_rows:
+                    st.dataframe(pd.DataFrame(semantic_rows), hide_index=True, use_container_width=True)
+                    st.markdown("### 优先推荐阅读")
+                    for item in results[:5]:
+                        with st.container(border=True):
+                            st.markdown(f"**对象 {item['index'] + 1} · {item['profile'].get('author_name') or '未提供作者'}**")
+                            st.write(item["input"])
+                            st.caption(f"语义相关度 {item.get('llm_score', 0):.3f} · 综合分 {item['similarity']:.3f}")
+                            st.write(item.get("semantic_reason") or "模型未返回详细理由。")
+                            if item.get("common_interest"):
+                                st.write("共同兴趣：" + item["common_interest"])
+                            if item.get("difference"):
+                                st.write("互补角度：" + item["difference"])
+                            source_url = item["profile"].get("source_url", "")
+                            if source_url:
+                                st.link_button("阅读原文并核对作者", source_url)
+
+            if semantic_mode:
+                st.info("语义判断结果来自知乎直答模型；失败或未勾选时仍使用 TF-IDF。")
             ready = bool(results)
         except ValueError as exc:
             state["results"] = []
