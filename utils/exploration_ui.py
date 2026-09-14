@@ -84,7 +84,7 @@ def _render_page():
         mode = st.radio("话题来源", ["知乎热榜", "自定义话题"], horizontal=True)
         title, url = "", ""
         if mode == "知乎热榜":
-            if st.button("获取 / 刷新热榜"):
+            if st.button("获取 / 刷新热榜", type="primary"):
                 client = None
                 try:
                     client = ZhihuClient()
@@ -101,7 +101,7 @@ def _render_page():
                 st.write(hot[chosen].get("Summary") or "暂无摘要")
         else:
             title = st.text_input("话题关键词", max_chars=100).strip()
-        if st.button("确认话题", disabled=not bool(title)):
+        if st.button("确认话题", disabled=not bool(title), type="primary"):
             anchor = {"title": title, "url": url}
             if state["anchor"] != anchor:
                 revision = state["revision"] + 1

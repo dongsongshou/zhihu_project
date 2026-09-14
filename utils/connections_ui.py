@@ -62,7 +62,7 @@ def render_connections(state):
                 key=f"invite_{token}",
             )
             card["invitation_draft"] = edited
-            if st.button("更新本地收藏" if token in saved else "加入本地待联系名单", key=f"save_{token}", disabled=not source):
+            if st.button("更新本地收藏" if token in saved else "加入本地待联系名单", key=f"save_{token}", disabled=not source, type="primary"):
                 previous = saved.get(token, {})
                 saved[token] = {**card, "note": previous.get("note", ""), "status": previous.get("status", "待核对")}
                 st.success("已保存在当前会话。未执行知乎关注或发送通知。")
@@ -126,7 +126,7 @@ def render_connections(state):
         '文本相关性不代表立场一致。请回到原文核对背景并尊重作者。</footer></main></body></html>'
     )
     st.download_button("下载可分享的 HTML 话题卡", share_html, "discussion_share.html", "text/html", disabled=not selected or not group_title.strip())
-    if st.button("保存本次讨论草案到会话", disabled=not selected or not group_title.strip()):
+    if st.button("保存本次讨论草案到会话", disabled=not selected or not group_title.strip(), type="primary"):
         state["discussion_draft"] = draft
         st.success("已保存公开版草案，未发送邀请。")
     st.caption("真实群聊、多用户对话、OAuth 身份绑定和持久化关系管理尚未接入。请先获得对方参与同意，再在合适的平台组织讨论。")

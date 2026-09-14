@@ -5,60 +5,174 @@ st.set_page_config(page_title="知乎同频观点匹配系统", layout="wide")
 
 st.markdown("""
 <style>
-/* 统一强化操作按钮，主按钮与普通按钮有明显层级。 */
-.stButton > button, .stDownloadButton > button, .stPageLink > a {
-    min-height: 2.7rem;
-    border-radius: 10px;
-    font-weight: 700;
-    border: 1px solid #155e75;
-    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+/* ============================================================
+   全局按钮体系：统一知乎蓝色调，用三级视觉权重区分用途
+     一级 primary        渐变实心 + 亮蓝描边，关键推进动作
+     二级 secondary      浅蓝填充 + 蓝描边，辅助操作
+     三级 download/link  白底蓝描边，导出与外链
+   ============================================================ */
+
+/* 所有按钮的共同基线 */
+.stButton > button,
+.stDownloadButton > button,
+.stLinkButton > a,
+[data-testid="stBaseButton-secondary"],
+[data-testid="stBaseButton-primary"] {
+    min-height: 2.85rem !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important;
+    letter-spacing: .01em;
+    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease, background .15s ease !important;
 }
-.stButton > button[kind="primary"] {
-    background: #075985;
-    color: #fff;
-    border-color: #05445e;
-    box-shadow: 0 4px 12px rgba(7,89,133,.28);
+
+/* ---------- 一级：primary 关键动作 ---------- */
+.stButton > button[kind="primary"],
+[data-testid="stBaseButton-primary"] {
+    background-image: linear-gradient(135deg, #0284c7, #075985) !important;
+    background-color: #0284c7 !important;
+    color: #ffffff !important;
+    border: 2px solid #38bdf8 !important;
+    box-shadow: 0 6px 18px rgba(2,132,199,.34) !important;
 }
-.stButton > button[kind="primary"]:hover {
-    background: #064e70;
+.stButton > button[kind="primary"] p,
+[data-testid="stBaseButton-primary"] p {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+}
+.stButton > button[kind="primary"]:hover:not(:disabled),
+[data-testid="stBaseButton-primary"]:hover:not(:disabled) {
+    filter: brightness(1.08);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(2,132,199,.48) !important;
+}
+
+/* ---------- 二级：普通按钮 ---------- */
+.stButton > button:not([kind="primary"]),
+[data-testid="stBaseButton-secondary"] {
+    background: #e0f2fe !important;
+    color: #0c4a6e !important;
+    border: 1.5px solid #7dd3fc !important;
+}
+.stButton > button:not([kind="primary"]) p,
+[data-testid="stBaseButton-secondary"] p {
+    color: #0c4a6e !important;
+    font-weight: 700 !important;
+}
+.stButton > button:not([kind="primary"]):hover:not(:disabled),
+[data-testid="stBaseButton-secondary"]:hover:not(:disabled) {
+    background: #bae6fd !important;
+    border-color: #38bdf8 !important;
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(7,89,133,.36);
+    box-shadow: 0 6px 16px rgba(2,132,199,.24) !important;
 }
-.stButton > button:not([kind="primary"]), .stDownloadButton > button {
-    background: #e0f2fe;
-    color: #0c4a6e;
+
+/* ---------- 三级：下载按钮与外链按钮 ---------- */
+.stDownloadButton > button,
+.stLinkButton > a {
+    background: #ffffff !important;
+    color: #075985 !important;
+    border: 1.5px solid #7dd3fc !important;
 }
-.stButton > button:not([kind="primary"]):hover, .stDownloadButton > button:hover {
-    background: #bae6fd;
+.stDownloadButton > button p,
+.stLinkButton > a p {
+    color: #075985 !important;
+    font-weight: 700 !important;
 }
-.stButton > button:disabled { opacity: .45; }
-.hero-cta { margin: 1.4rem 0; }
-.hero-cta a, .hero-cta a:link, .hero-cta a:visited,
-.hero-cta [data-testid="stPageLink-NavLink"],
-.hero-cta [data-testid="stPageLink-NavLink"]:link,
-.hero-cta [data-testid="stPageLink-NavLink"]:visited {
-    display: inline-flex;
+.stDownloadButton > button:hover:not(:disabled),
+.stLinkButton > a:hover {
+    background: #f0f9ff !important;
+    border-color: #0284c7 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(2,132,199,.2) !important;
+}
+
+/* ---------- 禁用态：保持可读但明显不可点 ---------- */
+.stButton > button:disabled,
+.stDownloadButton > button:disabled,
+[data-testid="stBaseButton-primary"]:disabled,
+[data-testid="stBaseButton-secondary"]:disabled {
+    opacity: .42 !important;
+    filter: grayscale(.35);
+    transform: none !important;
+    box-shadow: none !important;
+    cursor: not-allowed;
+}
+
+/* ---------- 返回首页等页内导航链接 ---------- */
+[data-testid="stPageLink-NavLink"] {
+    border-radius: 10px;
+    transition: background .15s ease;
+}
+
+/* 尊重系统减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+    .stButton > button:hover,
+    .stDownloadButton > button:hover,
+    .stLinkButton > a:hover,
+    [data-testid="stBaseButton-primary"]:hover,
+    [data-testid="stBaseButton-secondary"]:hover { transform: none !important; }
+}
+
+/* 首页主行动按钮。
+   通过 st.container(key="hero_cta") 生成的 .st-key-hero_cta 定位，
+   不能用裸 <div> 包裹——Markdown 与 page_link 是两个独立元素，
+   开标签会被立即闭合，无法形成父子关系。 */
+.st-key-hero_cta { margin: 1.5rem 0 .6rem; }
+
+.st-key-hero_cta a,
+.st-key-hero_cta a:link,
+.st-key-hero_cta a:visited,
+.st-key-hero_cta [data-testid="stPageLink-NavLink"],
+.st-key-hero_cta [data-testid="stPageLink-NavLink"]:link,
+.st-key-hero_cta [data-testid="stPageLink-NavLink"]:visited {
+    display: inline-flex !important;
     align-items: center;
     justify-content: center;
-    min-height: 3.4rem;
-    padding: 0 2rem;
+    min-height: 3.5rem;
+    padding: 0 2.6rem !important;
     border-radius: 14px;
-        background: #7c2d12 !important;
-        color: #ffffff !important;
-        background-image: linear-gradient(135deg, #9a3412, #7c2d12) !important;
-    border: 2px solid #fbbf24 !important;
-    box-shadow: 0 8px 20px rgba(245,158,11,.35);
-    font-size: 1.08rem;
-    font-weight: 800;
+    background-image: linear-gradient(135deg, #0284c7, #075985) !important;
+    color: #ffffff !important;
+    border: 2px solid #38bdf8 !important;
+    box-shadow: 0 8px 22px rgba(2,132,199,.38);
+    font-size: 1.12rem !important;
+    font-weight: 800 !important;
     text-decoration: none !important;
-    transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+    animation: heroPulse 2.6s ease-in-out infinite;
 }
-.hero-cta a:hover, .hero-cta a:focus,
-.hero-cta [data-testid="stPageLink-NavLink"]:hover,
-.hero-cta [data-testid="stPageLink-NavLink"]:focus {
-    background: #92400e !important;
-    transform: translateY(-2px) scale(1.01);
-    box-shadow: 0 11px 26px rgba(124,45,18,.55);
+
+/* page_link 内部的文字与图标节点默认继承灰色，需一并覆盖 */
+.st-key-hero_cta [data-testid="stPageLink-NavLink"] p,
+.st-key-hero_cta [data-testid="stPageLink-NavLink"] span,
+.st-key-hero_cta [data-testid="stPageLink-NavLink"] div {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    font-size: 1.12rem !important;
+    margin: 0 !important;
+}
+
+.st-key-hero_cta a:hover,
+.st-key-hero_cta [data-testid="stPageLink-NavLink"]:hover,
+.st-key-hero_cta [data-testid="stPageLink-NavLink"]:focus {
+    filter: brightness(1.08);
+    transform: translateY(-2px) scale(1.015);
+    box-shadow: 0 12px 28px rgba(2,132,199,.55);
+    animation: none;
+}
+
+/* 呼吸式光圈，引导用户注意主入口 */
+@keyframes heroPulse {
+    0%, 100% { box-shadow: 0 8px 22px rgba(2,132,199,.38), 0 0 0 0 rgba(56,189,248,.55); }
+    50%      { box-shadow: 0 8px 22px rgba(2,132,199,.45), 0 0 0 10px rgba(56,189,248,0); }
+}
+
+/* 遵循系统的减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+    .st-key-hero_cta a,
+    .st-key-hero_cta [data-testid="stPageLink-NavLink"] { animation: none !important; }
+    .st-key-hero_cta a:hover,
+    .st-key-hero_cta [data-testid="stPageLink-NavLink"]:hover { transform: none; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -75,9 +189,9 @@ def landing():
     if hero_image.is_file():
         st.image(str(hero_image), use_container_width=True)
     st.markdown("**选择话题 → 收集内容 → 快速阅读 → 探索关系 → 发现作者 → 筹备讨论 → 导出报告**")
-    st.markdown('<div class="hero-cta">', unsafe_allow_html=True)
-    st.page_link(explore_page, label="开始 / 继续话题探索")
-    st.markdown('</div>', unsafe_allow_html=True)
+    # 用带 key 的容器包裹，使 CSS 能通过 .st-key-hero_cta 命中内部的 page_link。
+    with st.container(key="hero_cta"):
+        st.page_link(explore_page, label="开始 / 继续话题探索", icon="🚀")
     st.caption("支持知乎热榜和自定义话题。返回上一步保留数据，不重复调用接口。")
     with st.expander("算法与使用边界"):
         st.markdown("""
